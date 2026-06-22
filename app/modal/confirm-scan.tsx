@@ -35,6 +35,7 @@ export default function ConfirmScanScreen() {
   const [amount, setAmount] = useState(
     parsed?.amount != null ? String(parsed.amount) : ''
   );
+  const [merchant, setMerchant] = useState(parsed?.merchant ?? '');
   const [envelopeId, setEnvelopeId] = useState<string | null>(
     envelopes[0]?.id ?? null
   );
@@ -51,7 +52,7 @@ export default function ConfirmScanScreen() {
       envelopeId,
       amount: -toMinorUnits(value, currency),
       currency,
-      merchant: parsed?.merchant ?? null,
+      merchant: merchant.trim() || null,
       note: null,
       source: 'scan',
       rawOcr: parsed?.rawText ?? null,
@@ -71,7 +72,11 @@ export default function ConfirmScanScreen() {
     );
   }
 
-  const lowConfidence = parsed.amount == null;
+  const { level, score, reasons } = parsed.confidence;
+  const confColor =
+    level === 'high' ? colors.positive : level === 'medium' ? colors.warning : colors.negative;
+  const confIcon =
+    level === 'high' ? 'checkmark-circle' : level === 'medium' ? 'alert-circle' : 'help-circle';
 
   return (
     <KeyboardAvoidingView
@@ -79,22 +84,30 @@ export default function ConfirmScanScreen() {
       style={{ flex: 1, backgroundColor: colors.background }}
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.banner}>
-          <Ionicons
-            name={lowConfidence ? 'alert-circle' : 'sparkles'}
-            size={18}
-            color={lowConfidence ? colors.warning : colors.accent}
-          />
-          <Text style={styles.bannerText}>
-            {lowConfidence
-              ? "Couldn't read a total — enter it manually."
-              : 'Detected total below. Check it before saving.'}
-          </Text>
+        <View style={[styles.banner, { borderColor: confColor }]}>
+          <Ionicons name={confIcon} size={20} color={confColor} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.confTitle, { color: confColor }]}>
+              {level === 'high'
+                ? `High confidence (${Math.round(score * 100)}%)`
+                : level === 'medium'
+                  ? `Medium confidence (${Math.round(score * 100)}%) — double-check`
+                  : `Low confidence (${Math.round(score * 100)}%) — verify the amount`}
+            </Text>
+            {reasons.length > 0 && (
+              <Text style={styles.confReasons}>{reasons.join(' · ')}</Text>
+            )}
+          </View>
         </View>
 
-        {parsed.merchant ? (
-          <Text style={styles.merchant}>{parsed.merchant}</Text>
-        ) : null}
+        <Text style={styles.label}>Store / merchant</Text>
+        <TextInput
+          value={merchant}
+          onChangeText={setMerchant}
+          placeholder="e.g. Best Buy"
+          placeholderTextColor={colors.textFaint}
+          style={styles.input}
+        />
 
         <Text style={styles.label}>Amount ({currency})</Text>
         <TextInput
@@ -104,7 +117,7 @@ export default function ConfirmScanScreen() {
           placeholderTextColor={colors.textFaint}
           keyboardType="decimal-pad"
           style={styles.amountInput}
-          autoFocus={lowConfidence}
+          autoFocus={level === 'low'}
         />
 
         {parsed.candidates.length > 1 && (
@@ -158,20 +171,27 @@ const makeStyles = (c: AppColors) =>
       gap: spacing.sm,
       backgroundColor: c.card,
       borderRadius: radius.md,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: c.border,
+      borderWidth: 1,
       padding: spacing.md,
     },
-    bannerText: {
-      flex: 1,
+    confTitle: {
       fontSize: fontSize.sm,
-      color: c.textMuted,
-    },
-    merchant: {
-      fontSize: fontSize.lg,
       fontWeight: '700',
+    },
+    confReasons: {
+      fontSize: fontSize.xs,
+      color: c.textMuted,
+      marginTop: 2,
+    },
+    input: {
+      backgroundColor: c.card,
+      borderRadius: radius.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: c.border,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
+      fontSize: fontSize.md,
       color: c.text,
-      marginTop: spacing.lg,
     },
     label: {
       fontSize: fontSize.sm,

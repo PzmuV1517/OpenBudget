@@ -3,27 +3,13 @@
  * Keep this the single public entry point for parsing; screens call only this.
  */
 import { decimalsFor, toMinorUnits } from '../money';
-import { extractTotal, normalize } from './extractTotal';
-import { NEGATIVE_KEYWORDS, TOTAL_KEYWORDS } from './keywords';
+import { scoreTotalConfidence } from './confidence';
+import { extractMerchant } from './extractMerchant';
+import { extractTotal } from './extractTotal';
 import type { OcrResult, ParsedReceipt } from './types';
 
 export interface ParseOptions {
   defaultCurrency?: string;
-}
-
-/** Guess the merchant: first non-empty line that isn't an amount/keyword line. */
-function guessMerchant(ocr: OcrResult): string | undefined {
-  const skip = [...TOTAL_KEYWORDS, ...NEGATIVE_KEYWORDS].map(normalize);
-  for (const line of ocr.lines.slice(0, 5)) {
-    const text = line.text.trim();
-    if (text.length < 3) continue;
-    const norm = normalize(text);
-    if (skip.some((k) => norm.includes(k))) continue;
-    if (/^[\d\s.,:$€£¥-]+$/.test(text)) continue; // mostly numbers/symbols
-    // Prefer a line with letters; collapse internal whitespace.
-    if (/\p{L}/u.test(text)) return text.replace(/\s+/g, ' ');
-  }
-  return undefined;
 }
 
 export function parseOcr(
@@ -50,7 +36,8 @@ export function parseOcr(
     amount,
     amountMinor: amount != null ? toMinorUnits(amount, currency) : null,
     currency,
-    merchant: guessMerchant(ocr),
+    merchant: extractMerchant(ocr),
+    confidence: scoreTotalConfidence(finalPass.candidates),
     rawText,
     candidates: finalPass.candidates,
   };
