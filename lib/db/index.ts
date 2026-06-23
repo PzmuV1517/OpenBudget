@@ -6,7 +6,7 @@ import * as SQLite from 'expo-sqlite';
 
 import { uid } from '../id';
 import { SCHEMA_SQL, SCHEMA_VERSION } from './schema';
-import type { Envelope, Transaction, TransactionSource } from './types';
+import type { Envelope, LineItem, Transaction, TransactionSource } from './types';
 
 const DB_NAME = 'openbudget.db';
 
@@ -24,7 +24,15 @@ export function initDb(): void {
   const row = c.getFirstSync<{ user_version: number }>('PRAGMA user_version');
   const current = row?.user_version ?? 0;
   if (current < SCHEMA_VERSION) {
-    // Future migrations slot in here, keyed by `current`.
+    if (current < 2) {
+      // v1 -> v2: itemized bills. Fresh DBs already have the column from the
+      // CREATE TABLE above, so tolerate the "duplicate column" error.
+      try {
+        c.execSync('ALTER TABLE transactions ADD COLUMN line_items TEXT');
+      } catch {
+        // column already exists
+      }
+    }
     c.execSync(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   }
 }
@@ -50,7 +58,19 @@ interface TxnRow {
   merchant: string | null;
   source: string;
   raw_ocr: string | null;
+  line_items: string | null;
   created_at: number;
+}
+
+/** Parse the stored line_items JSON, tolerating malformed/legacy values. */
+function parseLineItems(json: string | null): LineItem[] | null {
+  if (!json) return null;
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) && parsed.length > 0 ? (parsed as LineItem[]) : null;
+  } catch {
+    return null;
+  }
 }
 
 function mapEnvelope(r: EnvelopeRow): Envelope {
@@ -75,6 +95,7 @@ function mapTxn(r: TxnRow): Transaction {
     merchant: r.merchant,
     source: r.source as TransactionSource,
     rawOcr: r.raw_ocr,
+    lineItems: parseLineItems(r.line_items),
     createdAt: r.created_at,
   };
 }
@@ -169,9 +190,11 @@ export interface NewTransaction {
   merchant?: string | null;
   source: TransactionSource;
   rawOcr?: string | null;
+  lineItems?: LineItem[] | null;
 }
 
 export function insertTransaction(input: NewTransaction): Transaction {
+  const lineItems = input.lineItems && input.lineItems.length > 0 ? input.lineItems : null;
   const txn: Transaction = {
     id: uid('txn_'),
     envelopeId: input.envelopeId,
@@ -181,12 +204,13 @@ export function insertTransaction(input: NewTransaction): Transaction {
     merchant: input.merchant ?? null,
     source: input.source,
     rawOcr: input.rawOcr ?? null,
+    lineItems,
     createdAt: Date.now(),
   };
   conn().runSync(
     `INSERT INTO transactions
-       (id, envelope_id, amount, currency, note, merchant, source, raw_ocr, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, envelope_id, amount, currency, note, merchant, source, raw_ocr, line_items, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       txn.id,
       txn.envelopeId,
@@ -196,10 +220,30 @@ export function insertTransaction(input: NewTransaction): Transaction {
       txn.merchant,
       txn.source,
       txn.rawOcr,
+      lineItems ? JSON.stringify(lineItems) : null,
       txn.createdAt,
     ]
   );
   return txn;
+}
+
+export function updateTransactionRow(
+  id: string,
+  patch: Partial<Pick<Transaction, 'note' | 'merchant' | 'lineItems'>>
+): void {
+  const fields: string[] = [];
+  const values: SQLite.SQLiteBindValue[] = [];
+  if (patch.note !== undefined) (fields.push('note = ?'), values.push(patch.note));
+  if (patch.merchant !== undefined)
+    (fields.push('merchant = ?'), values.push(patch.merchant));
+  if (patch.lineItems !== undefined) {
+    const li = patch.lineItems && patch.lineItems.length > 0 ? patch.lineItems : null;
+    fields.push('line_items = ?');
+    values.push(li ? JSON.stringify(li) : null);
+  }
+  if (fields.length === 0) return;
+  values.push(id);
+  conn().runSync(`UPDATE transactions SET ${fields.join(', ')} WHERE id = ?`, values);
 }
 
 export function deleteTransactionRow(id: string): void {

@@ -34,6 +34,10 @@ export default function RootLayout() {
             options={{ title: 'Envelope', headerBackTitle: 'Back' }}
           />
           <Stack.Screen
+            name="transaction/[id]"
+            options={{ title: 'Transaction', headerBackTitle: 'Back' }}
+          />
+          <Stack.Screen
             name="add/manual"
             options={{ title: 'Add spending', presentation: 'modal' }}
           />

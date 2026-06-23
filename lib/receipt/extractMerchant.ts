@@ -7,17 +7,8 @@
  */
 import { normalize } from './extractTotal';
 import { NEGATIVE_KEYWORDS, TOTAL_KEYWORDS } from './keywords';
+import { looksLikeNoise } from './patterns';
 import type { OcrResult } from './types';
-
-// Lines that look like contact info / boilerplate, never the store name.
-const NOISE_PATTERNS: RegExp[] = [
-  /www\.|https?:|\.com\b|\.net\b|\.org\b/i,
-  /\btel\b|\bphone\b|\bfax\b|\bemail\b/i,
-  /\breceipt\b|\binvoice\b|\border\b|\btransaction\b|\bcashier\b|\bregister\b|\bcustomer\b/i,
-  /store\s*#|reg\s*#|\bvat\b|\btax\s*id\b/i,
-  /\d{1,2}[:/]\d{2}/, // time or date fragments
-  /\b\d{3}[-.\s]?\d{3,4}\b/, // phone-like
-];
 
 const BOILERPLATE = [
   'receipt',
@@ -66,7 +57,7 @@ export function extractMerchant(ocr: OcrResult): string | undefined {
     // Reject keyword, negative-keyword and contact/boilerplate lines.
     if (TOTAL_KEYWORDS.some((k) => norm.includes(normalize(k)))) return;
     if (NEGATIVE_KEYWORDS.some((k) => norm.includes(normalize(k)))) return;
-    if (NOISE_PATTERNS.some((re) => re.test(text))) return;
+    if (looksLikeNoise(text)) return;
 
     const letters = (text.match(/\p{L}/gu) ?? []).length;
     const alphaRatio = letters / text.length;

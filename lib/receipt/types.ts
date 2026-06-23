@@ -46,6 +46,12 @@ export interface TotalConfidence {
   reasons: string[];
 }
 
+/** A single line item read off the receipt. Price is in MAJOR units here. */
+export interface ReceiptItem {
+  name: string;
+  price: number;
+}
+
 export interface ParsedReceipt {
   /** Best-guess total in integer minor units, or null if nothing found. */
   amountMinor: number | null;
@@ -55,6 +61,8 @@ export interface ParsedReceipt {
   merchant?: string;
   /** How sure we are about the detected total. */
   confidence: TotalConfidence;
+  /** Detected line items (top-to-bottom), best effort. */
+  items: ReceiptItem[];
   rawText: string;
   /** All ranked candidates, best first — handy for the confirm UI. */
   candidates: AmountCandidate[];

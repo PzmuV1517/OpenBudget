@@ -10,10 +10,11 @@ interface AddSheetProps {
   onClose: () => void;
   onManual: () => void;
   onScan: () => void;
+  onGallery: () => void;
 }
 
-/** Bottom action sheet shown by the FAB: enter manually or scan a receipt. */
-export function AddSheet({ visible, onClose, onManual, onScan }: AddSheetProps) {
+/** Bottom action sheet shown by the FAB: enter manually, scan, or pick a photo. */
+export function AddSheet({ visible, onClose, onManual, onScan, onGallery }: AddSheetProps) {
   const insets = useSafeAreaInsets();
   const styles = useThemedStyles(makeStyles);
   return (
@@ -41,6 +42,13 @@ export function AddSheet({ visible, onClose, onManual, onScan }: AddSheetProps) 
             label="Scan receipt"
             hint="Capture a receipt and parse the total on-device"
             onPress={onScan}
+            styles={styles}
+          />
+          <Option
+            icon="image-outline"
+            label="Use photo from gallery"
+            hint="Pick an existing receipt photo and parse it on-device"
+            onPress={onGallery}
             styles={styles}
           />
         </Pressable>

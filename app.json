@@ -34,6 +34,12 @@
         {
           "cameraPermission": "OpenBudget uses the camera to scan receipts on-device. No images leave your phone."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "OpenBudget reads receipt photos you choose, on-device. No images leave your phone."
+        }
       ]
     ]
   }

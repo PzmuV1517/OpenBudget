@@ -1,7 +1,8 @@
 import { FlashList } from '@shopify/flash-list';
+import { useRouter } from 'expo-router';
 import { format, isToday, isYesterday } from 'date-fns';
 import { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AmountText } from '@/components/AmountText';
 import { EnvelopePill } from '@/components/EnvelopePill';
@@ -37,6 +38,7 @@ function buildRows(transactions: Transaction[]): Row[] {
 }
 
 export default function SpendingScreen() {
+  const router = useRouter();
   const transactions = useBudget((s) => s.transactions);
   const envelopes = useBudget((s) => s.envelopes);
   const styles = useThemedStyles(makeStyles);
@@ -75,17 +77,24 @@ export default function SpendingScreen() {
           txn.merchant?.trim() ||
           txn.note?.trim() ||
           (txn.amount >= 0 ? 'Top-up' : 'Spending');
+        const itemCount = txn.lineItems?.length ?? 0;
         return (
-          <View style={styles.row}>
+          <Pressable
+            onPress={() => router.push(`/transaction/${txn.id}`)}
+            style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
+          >
             <View style={styles.rowLeft}>
               <Text numberOfLines={1} style={styles.title}>
                 {title}
               </Text>
-              {env && (
-                <View style={{ marginTop: 4 }}>
-                  <EnvelopePill name={env.name} color={env.color} />
-                </View>
-              )}
+              <View style={styles.rowMeta}>
+                {env && <EnvelopePill name={env.name} color={env.color} />}
+                {itemCount > 0 && (
+                  <Text style={styles.itemBadge}>
+                    {itemCount} item{itemCount === 1 ? '' : 's'}
+                  </Text>
+                )}
+              </View>
             </View>
             <AmountText
               minor={txn.amount}
@@ -93,7 +102,7 @@ export default function SpendingScreen() {
               colorBySign
               size="md"
             />
-          </View>
+          </Pressable>
         );
       }}
     />
@@ -124,6 +133,17 @@ const makeStyles = (c: AppColors) =>
     rowLeft: {
       flex: 1,
       marginRight: spacing.md,
+    },
+    rowMeta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      marginTop: 4,
+    },
+    itemBadge: {
+      fontSize: fontSize.xs,
+      fontWeight: '600',
+      color: c.textFaint,
     },
     title: {
       fontSize: fontSize.md,

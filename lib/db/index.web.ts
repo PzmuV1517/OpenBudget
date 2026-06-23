@@ -5,7 +5,7 @@
  * not for real persistence. Metro picks this file for `platform === 'web'`.
  */
 import { uid } from '../id';
-import type { Envelope, Transaction, TransactionSource } from './types';
+import type { Envelope, LineItem, Transaction, TransactionSource } from './types';
 
 let envelopes: Envelope[] = [];
 let transactions: Transaction[] = [];
@@ -75,6 +75,7 @@ export interface NewTransaction {
   merchant?: string | null;
   source: TransactionSource;
   rawOcr?: string | null;
+  lineItems?: LineItem[] | null;
 }
 
 export function insertTransaction(input: NewTransaction): Transaction {
@@ -87,10 +88,25 @@ export function insertTransaction(input: NewTransaction): Transaction {
     merchant: input.merchant ?? null,
     source: input.source,
     rawOcr: input.rawOcr ?? null,
+    lineItems: input.lineItems && input.lineItems.length > 0 ? input.lineItems : null,
     createdAt: Date.now(),
   };
   transactions.unshift(txn);
   return txn;
+}
+
+export function updateTransactionRow(
+  id: string,
+  patch: Partial<Pick<Transaction, 'note' | 'merchant' | 'lineItems'>>
+): void {
+  transactions = transactions.map((t) => {
+    if (t.id !== id) return t;
+    const next = { ...t, ...patch };
+    if (patch.lineItems !== undefined) {
+      next.lineItems = patch.lineItems && patch.lineItems.length > 0 ? patch.lineItems : null;
+    }
+    return next;
+  });
 }
 
 export function deleteTransactionRow(id: string): void {

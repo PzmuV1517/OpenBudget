@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useMemo, useState } from 'react';
 import {
@@ -26,6 +26,7 @@ import { type AppColors, fontSize, radius, spacing } from '@/lib/theme';
 
 export default function EnvelopeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -104,7 +105,10 @@ export default function EnvelopeDetailScreen() {
           <Card padded={false} style={styles.histCard}>
             {envTxns.map((t, i) => (
               <View key={t.id}>
-                <View style={styles.txnRow}>
+                <Pressable
+                  onPress={() => router.push(`/transaction/${t.id}`)}
+                  style={({ pressed }) => [styles.txnRow, pressed && { opacity: 0.6 }]}
+                >
                   <View style={{ flex: 1 }}>
                     <Text style={styles.txnTitle} numberOfLines={1}>
                       {t.merchant?.trim() ||
@@ -122,7 +126,7 @@ export default function EnvelopeDetailScreen() {
                     colorBySign
                     size="md"
                   />
-                </View>
+                </Pressable>
                 {i < envTxns.length - 1 && <View style={styles.divider} />}
               </View>
             ))}

@@ -105,6 +105,10 @@ export default function HomeScreen() {
           setSheetOpen(false);
           router.push('/add/scan');
         }}
+        onGallery={() => {
+          setSheetOpen(false);
+          router.push('/add/scan?source=gallery');
+        }}
       />
     </View>
   );

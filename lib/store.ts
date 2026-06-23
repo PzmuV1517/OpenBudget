@@ -39,6 +39,10 @@ interface BudgetState {
   addTransaction: (input: db.NewTransaction) => Transaction;
   /** Convenience: positive top-up into an envelope. */
   topUp: (envelopeId: string, amount: number, currency: string, note?: string) => Transaction;
+  updateTransaction: (
+    id: string,
+    patch: Partial<Pick<Transaction, 'note' | 'merchant' | 'lineItems'>>
+  ) => void;
   deleteTransaction: (id: string) => void;
 
   /** Wipe all envelopes + transactions (keeps settings like theme/currency). */
@@ -131,6 +135,15 @@ export const useBudget = create<BudgetState>((set, get) => ({
       currency,
       note: note ?? 'Top-up',
       source: 'manual',
+    });
+  },
+
+  updateTransaction: (id, patch) => {
+    db.updateTransactionRow(id, patch);
+    set({
+      transactions: get().transactions.map((t) =>
+        t.id === id ? { ...t, ...patch } : t
+      ),
     });
   },
 

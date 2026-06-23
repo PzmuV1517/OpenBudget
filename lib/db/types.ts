@@ -2,6 +2,12 @@
 
 export type TransactionSource = 'manual' | 'scan';
 
+/** A persisted line item. Price is in integer MINOR units (like all money). */
+export interface LineItem {
+  name: string;
+  price: number;
+}
+
 export interface Envelope {
   id: string;
   name: string;
@@ -21,6 +27,8 @@ export interface Transaction {
   merchant: string | null;
   source: TransactionSource;
   rawOcr: string | null;
+  /** Itemized bill, if the user kept one; otherwise null. */
+  lineItems: LineItem[] | null;
   createdAt: number; // epoch ms
 }
 

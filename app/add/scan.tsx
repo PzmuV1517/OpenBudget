@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -21,6 +22,8 @@ import { type AppColors, fontSize, radius, spacing } from '@/lib/theme';
 
 export default function ScanScreen() {
   const router = useRouter();
+  const { source } = useLocalSearchParams<{ source?: string }>();
+  const fromGallery = source === 'gallery';
   const cameraRef = useRef<CameraView>(null);
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -28,14 +31,11 @@ export default function ScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [busy, setBusy] = useState(false);
 
-  async function capture() {
-    if (!cameraRef.current || busy) return;
+  /** OCR a local image URI, parse it, and hand off to the confirm screen. */
+  async function processImage(uri: string) {
     setBusy(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.7 });
-      if (!photo?.uri) throw new Error('No image captured');
-
-      const ocr = await recognizeImage(photo.uri);
+      const ocr = await recognizeImage(uri);
       const parsed = parseOcr(ocr, { defaultCurrency });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
@@ -60,13 +60,46 @@ export default function ScanScreen() {
           : `Couldn't read the receipt (${message}). You can enter the amount manually instead.`,
         [
           { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Enter manually',
-            onPress: () => router.replace('/add/manual'),
-          },
+          { text: 'Enter manually', onPress: () => router.replace('/add/manual') },
         ]
       );
     }
+  }
+
+  async function capture() {
+    if (!cameraRef.current || busy) return;
+    const photo = await cameraRef.current.takePictureAsync({ quality: 0.7 });
+    if (!photo?.uri) return;
+    await processImage(photo.uri);
+  }
+
+  async function pickFromGallery() {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]?.uri) {
+      router.back();
+      return;
+    }
+    await processImage(result.assets[0].uri);
+  }
+
+  // Gallery mode opens the picker straight away instead of the camera.
+  useEffect(() => {
+    if (fromGallery) pickFromGallery();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromGallery]);
+
+  if (fromGallery) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator color={colors.accent} />
+        <Text style={styles.permHint}>
+          {busy ? 'Reading receipt…' : 'Opening gallery…'}
+        </Text>
+      </View>
+    );
   }
 
   if (!permission) {

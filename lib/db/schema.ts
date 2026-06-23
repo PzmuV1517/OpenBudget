@@ -1,6 +1,6 @@
 /** SQLite DDL. Bump SCHEMA_VERSION and add a migration when this changes. */
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const SCHEMA_SQL = `
 PRAGMA journal_mode = WAL;
@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   merchant    TEXT,
   source      TEXT NOT NULL,
   raw_ocr     TEXT,
+  line_items  TEXT,
   created_at  INTEGER NOT NULL
 );
 

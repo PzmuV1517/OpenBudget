@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 
 import { EnvelopePicker } from '@/components/EnvelopePicker';
+import { ItemizedBillCard, type EditableItem } from '@/components/ItemizedBillCard';
+import type { LineItem } from '@/lib/db/types';
 import { formatMoney, toMinorUnits } from '@/lib/money';
 import { normalizeAmount } from '@/lib/receipt';
 import { clearPendingScan, peekPendingScan } from '@/lib/scanHandoff';
@@ -36,8 +38,14 @@ export default function ConfirmScanScreen() {
     parsed?.amount != null ? String(parsed.amount) : ''
   );
   const [merchant, setMerchant] = useState(parsed?.merchant ?? '');
+  const [note, setNote] = useState('');
   const [envelopeId, setEnvelopeId] = useState<string | null>(
     envelopes[0]?.id ?? null
+  );
+  // Itemized bill is opt-in; pre-fill the editor from the detected items.
+  const [itemized, setItemized] = useState(false);
+  const [items, setItems] = useState<EditableItem[]>(() =>
+    (parsed?.items ?? []).map((it) => ({ name: it.name, price: String(it.price) }))
   );
 
   // Clear the hand-off when the modal unmounts so it can't leak to a later scan.
@@ -46,6 +54,18 @@ export default function ConfirmScanScreen() {
   const value = normalizeAmount(amount);
   const valid = value !== null && value > 0 && envelopeId !== null;
 
+  /** Editor rows -> persisted line items (minor units), dropping empty rows. */
+  function buildLineItems(): LineItem[] {
+    const out: LineItem[] = [];
+    for (const it of items) {
+      const name = it.name.trim();
+      const price = normalizeAmount(it.price);
+      if (!name || price === null) continue;
+      out.push({ name, price: toMinorUnits(price, currency) });
+    }
+    return out;
+  }
+
   function handleSave() {
     if (!valid || value === null || envelopeId === null) return;
     addTransaction({
@@ -53,9 +73,10 @@ export default function ConfirmScanScreen() {
       amount: -toMinorUnits(value, currency),
       currency,
       merchant: merchant.trim() || null,
-      note: null,
+      note: note.trim() || null,
       source: 'scan',
       rawOcr: parsed?.rawText ?? null,
+      lineItems: itemized ? buildLineItems() : null,
     });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.dismissAll();
@@ -109,6 +130,15 @@ export default function ConfirmScanScreen() {
           style={styles.input}
         />
 
+        <Text style={styles.label}>Description (optional)</Text>
+        <TextInput
+          value={note}
+          onChangeText={setNote}
+          placeholder="e.g. Cables for the office"
+          placeholderTextColor={colors.textFaint}
+          style={styles.input}
+        />
+
         <Text style={styles.label}>Amount ({currency})</Text>
         <TextInput
           value={amount}
@@ -138,6 +168,16 @@ export default function ConfirmScanScreen() {
             </View>
           </>
         )}
+
+        <View style={{ marginTop: spacing.lg }}>
+          <ItemizedBillCard
+            enabled={itemized}
+            onToggle={setItemized}
+            items={items}
+            onChange={setItems}
+            currency={currency}
+          />
+        </View>
 
         <Text style={styles.label}>Envelope</Text>
         <EnvelopePicker
