@@ -18,9 +18,17 @@ interface BudgetState {
   envelopes: Envelope[];
   transactions: Transaction[];
 
+  // Digital receipts (experimental notification capture).
+  drEnabled: boolean;
+  drApps: string[];
+  /** True once the user has enabled it AND picked at least one app. */
+  drConfiguredOnce: boolean;
+
   hydrate: () => void;
   setDefaultCurrency: (currency: string) => void;
   setThemeMode: (mode: ThemeMode) => void;
+  setDrEnabled: (enabled: boolean) => void;
+  setDrApps: (apps: string[]) => void;
 
   addEnvelope: (input: {
     name: string;
@@ -55,16 +63,28 @@ export const useBudget = create<BudgetState>((set, get) => ({
   themeMode: 'dark', // app defaults to the black/red dark theme
   envelopes: [],
   transactions: [],
+  drEnabled: false,
+  drApps: [],
+  drConfiguredOnce: false,
 
   hydrate: () => {
     db.initDb();
     const storedMode = db.getSetting('themeMode') as ThemeMode | null;
     const storedCurrency = db.getSetting('defaultCurrency');
+    let drApps: string[] = [];
+    try {
+      drApps = JSON.parse(db.getSetting('drApps') ?? '[]');
+    } catch {
+      drApps = [];
+    }
     set({
       envelopes: db.getEnvelopes(),
       transactions: db.getTransactions(),
       themeMode: storedMode ?? 'dark',
       defaultCurrency: storedCurrency ?? 'USD',
+      drEnabled: db.getSetting('drEnabled') === 'true',
+      drApps,
+      drConfiguredOnce: db.getSetting('drConfiguredOnce') === 'true',
       hydrated: true,
     });
   },
@@ -78,6 +98,21 @@ export const useBudget = create<BudgetState>((set, get) => ({
   setThemeMode: (mode) => {
     db.setSetting('themeMode', mode);
     set({ themeMode: mode });
+  },
+
+  setDrEnabled: (enabled) => {
+    db.setSetting('drEnabled', enabled ? 'true' : 'false');
+    set({ drEnabled: enabled });
+  },
+
+  setDrApps: (apps) => {
+    db.setSetting('drApps', JSON.stringify(apps));
+    // "Fully configured" once it's enabled with at least one app chosen.
+    const configured = get().drConfiguredOnce || (get().drEnabled && apps.length > 0);
+    if (configured && !get().drConfiguredOnce) {
+      db.setSetting('drConfiguredOnce', 'true');
+    }
+    set({ drApps: apps, drConfiguredOnce: configured });
   },
 
   addEnvelope: (input) => {

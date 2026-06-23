@@ -38,6 +38,18 @@ export default function RootLayout() {
             options={{ title: 'Transaction', headerBackTitle: 'Back' }}
           />
           <Stack.Screen
+            name="digital-receipts/index"
+            options={{ title: 'Digital receipts', headerBackTitle: 'Back' }}
+          />
+          <Stack.Screen
+            name="digital-receipts/apps"
+            options={{ title: 'Apps to monitor', headerBackTitle: 'Back' }}
+          />
+          <Stack.Screen
+            name="digital-receipts/ledger"
+            options={{ title: 'Digital receipt ledger', headerBackTitle: 'Back' }}
+          />
+          <Stack.Screen
             name="add/manual"
             options={{ title: 'Add spending', presentation: 'modal' }}
           />

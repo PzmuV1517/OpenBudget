@@ -1,14 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AddSheet } from '@/components/AddSheet';
 import { AmountText } from '@/components/AmountText';
 import { Card } from '@/components/Card';
 import { EnvelopeCard } from '@/components/EnvelopeCard';
-import { FAB } from '@/components/FAB';
+import { RadialAddMenu } from '@/components/RadialAddMenu';
 import { progressRatio } from '@/lib/money';
 import { budgetSummary, envelopeTotals, useBudget } from '@/lib/store';
 import { useTheme, useThemedStyles } from '@/lib/useTheme';
@@ -19,7 +18,6 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
-  const [sheetOpen, setSheetOpen] = useState(false);
 
   const envelopes = useBudget((s) => s.envelopes);
   const transactions = useBudget((s) => s.transactions);
@@ -92,23 +90,27 @@ export default function HomeScreen() {
         )}
       </ScrollView>
 
-      <FAB onPress={() => setSheetOpen(true)} />
-
-      <AddSheet
-        visible={sheetOpen}
-        onClose={() => setSheetOpen(false)}
-        onManual={() => {
-          setSheetOpen(false);
-          router.push('/add/manual');
-        }}
-        onScan={() => {
-          setSheetOpen(false);
-          router.push('/add/scan');
-        }}
-        onGallery={() => {
-          setSheetOpen(false);
-          router.push('/add/scan?source=gallery');
-        }}
+      <RadialAddMenu
+        options={[
+          {
+            key: 'manual',
+            label: 'Manual',
+            icon: 'create-outline',
+            onSelect: () => router.push('/add/manual'),
+          },
+          {
+            key: 'scan',
+            label: 'Scan',
+            icon: 'camera-outline',
+            onSelect: () => router.push('/add/scan'),
+          },
+          {
+            key: 'gallery',
+            label: 'Gallery',
+            icon: 'image-outline',
+            onSelect: () => router.push('/add/scan?source=gallery'),
+          },
+        ]}
       />
     </View>
   );

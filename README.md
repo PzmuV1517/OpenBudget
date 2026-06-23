@@ -1,8 +1,11 @@
 # OpenBudget
 
-A fully offline, store-agnostic, globally-capable envelope budgeting app.
-Receipts are scanned and parsed entirely on-device — no external APIs, no cloud,
-no per-request cost. All data lives locally in SQLite.
+A fully offline, store-agnostic, globally-capable envelope budgeting app for
+**Android**. Receipts are scanned and parsed entirely on-device — no external
+APIs, no cloud, no per-request cost. All data lives locally in SQLite.
+
+> Target platform is Android only. (The `web` target is kept purely as a fast UI
+> preview — see below — and is not a shipped platform.)
 
 ## Stack
 
@@ -19,15 +22,21 @@ no per-request cost. All data lives locally in SQLite.
 ## Important: OCR needs a dev build
 
 ML Kit is a native module — it does **not** work in Expo Go. Run a one-time
-prebuild + dev client:
+prebuild + dev client (Android):
 
 ```bash
-npx expo prebuild
-npx expo run:ios     # or run:android
+npx expo prebuild --platform android
+npx expo run:android
 ```
 
 Everything stays local and offline; the dev build is purely so the native OCR
 module is available.
+
+### Web preview (UI only)
+
+For eyeballing screens fast without a device, `npx expo start` → press `w`.
+SQLite and OCR are shimmed on web (in-memory DB, no real OCR), so it's for
+layout/flow review, not real use.
 
 ## Project layout
 

@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
+import { useRouter } from 'expo-router';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useBudget, type ThemeMode } from '@/lib/store';
@@ -16,6 +17,7 @@ const THEME_OPTIONS: { mode: ThemeMode; label: string; icon: keyof typeof Ionico
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'RON', 'JPY', 'CHF', 'PLN', 'CAD', 'AUD', 'INR'];
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
 
@@ -90,6 +92,31 @@ export default function SettingsScreen() {
             );
           })}
         </View>
+      </View>
+
+      {/* Features */}
+      <Text style={styles.sectionLabel}>Features</Text>
+      <View style={styles.card}>
+        <Pressable
+          style={styles.linkRow}
+          onPress={() => router.push('/digital-receipts')}
+        >
+          <View style={styles.linkIcon}>
+            <Ionicons name="notifications-outline" size={20} color={colors.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={styles.linkTitleRow}>
+              <Text style={styles.linkTitle}>Read digital receipts</Text>
+              <View style={styles.expBadge}>
+                <Text style={styles.expBadgeText}>EXPERIMENTAL</Text>
+              </View>
+            </View>
+            <Text style={styles.linkSubtitle}>
+              Turn payment notifications into spending prompts
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
+        </Pressable>
       </View>
 
       {/* Data */}
@@ -246,6 +273,48 @@ const makeStyles = (c: AppColors) =>
     },
     chipTextActive: {
       color: c.accent,
+    },
+    linkRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    linkIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: radius.md,
+      backgroundColor: c.accentSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    linkTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    linkTitle: {
+      fontSize: fontSize.md,
+      fontWeight: '700',
+      color: c.text,
+    },
+    linkSubtitle: {
+      fontSize: fontSize.sm,
+      color: c.textMuted,
+      marginTop: 2,
+    },
+    expBadge: {
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: radius.sm,
+      backgroundColor: c.warning + '22',
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: c.warning,
+    },
+    expBadgeText: {
+      fontSize: 9,
+      fontWeight: '800',
+      letterSpacing: 0.5,
+      color: c.warning,
     },
     statsRow: {
       flexDirection: 'row',

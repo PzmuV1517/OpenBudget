@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useState } from 'react';
 import {
@@ -28,8 +28,10 @@ export default function ManualAddScreen() {
   const currency = useBudget((s) => s.defaultCurrency);
   const addTransaction = useBudget((s) => s.addTransaction);
 
-  const [amount, setAmount] = useState('');
-  const [note, setNote] = useState('');
+  // Optional prefill (e.g. from a captured digital receipt).
+  const prefill = useLocalSearchParams<{ amount?: string; note?: string }>();
+  const [amount, setAmount] = useState(prefill.amount ?? '');
+  const [note, setNote] = useState(prefill.note ?? '');
   const [envelopeId, setEnvelopeId] = useState<string | null>(
     envelopes[0]?.id ?? null
   );
