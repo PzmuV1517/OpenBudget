@@ -14,8 +14,23 @@ export interface Envelope {
   allocated: number; // minor units
   color: string;
   icon: string | null;
+  /** Optional stack name; envelopes sharing one are merged on the home screen. */
+  stack: string | null;
+  /** ISO 4217 currency the allocation is held in. */
+  currency: string;
   sortOrder: number;
   createdAt: number; // epoch ms
+}
+
+/** Money someone owes you, earmarked to an envelope, not yet collected. */
+export interface Creditor {
+  id: string;
+  envelopeId: string;
+  name: string | null;
+  amount: number; // minor units, positive
+  currency: string;
+  note: string | null;
+  createdAt: number;
 }
 
 export interface Transaction {

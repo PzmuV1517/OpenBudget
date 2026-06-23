@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 
+import { CurrencyChips } from '@/components/CurrencyChips';
 import { EnvelopePicker } from '@/components/EnvelopePicker';
 import { toMinorUnits } from '@/lib/money';
 import { normalizeAmount } from '@/lib/receipt';
@@ -25,7 +26,7 @@ export default function ManualAddScreen() {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const envelopes = useBudget((s) => s.envelopes);
-  const currency = useBudget((s) => s.defaultCurrency);
+  const defaultCurrency = useBudget((s) => s.defaultCurrency);
   const addTransaction = useBudget((s) => s.addTransaction);
 
   // Optional prefill (e.g. from a captured digital receipt).
@@ -35,6 +36,8 @@ export default function ManualAddScreen() {
   const [envelopeId, setEnvelopeId] = useState<string | null>(
     envelopes[0]?.id ?? null
   );
+  // Default to the first envelope's currency; user can override.
+  const [curr, setCurr] = useState(envelopes[0]?.currency ?? defaultCurrency);
 
   const parsed = normalizeAmount(amount);
   const valid = parsed !== null && parsed > 0 && envelopeId !== null;
@@ -43,8 +46,8 @@ export default function ManualAddScreen() {
     if (!valid || parsed === null || envelopeId === null) return;
     addTransaction({
       envelopeId,
-      amount: -toMinorUnits(parsed, currency), // spend = negative
-      currency,
+      amount: -toMinorUnits(parsed, curr), // spend = negative
+      currency: curr,
       note: note.trim() || null,
       source: 'manual',
     });
@@ -73,7 +76,7 @@ export default function ManualAddScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.label}>Amount ({currency})</Text>
+        <Text style={styles.label}>Amount ({curr})</Text>
         <TextInput
           value={amount}
           onChangeText={setAmount}
@@ -83,6 +86,9 @@ export default function ManualAddScreen() {
           autoFocus
           style={styles.amountInput}
         />
+
+        <Text style={styles.label}>Currency</Text>
+        <CurrencyChips value={curr} onChange={setCurr} />
 
         <Text style={styles.label}>Envelope</Text>
         <EnvelopePicker

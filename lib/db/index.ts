@@ -6,7 +6,13 @@ import * as SQLite from 'expo-sqlite';
 
 import { uid } from '../id';
 import { SCHEMA_SQL, SCHEMA_VERSION } from './schema';
-import type { Envelope, LineItem, Transaction, TransactionSource } from './types';
+import type {
+  Creditor,
+  Envelope,
+  LineItem,
+  Transaction,
+  TransactionSource,
+} from './types';
 
 const DB_NAME = 'openbudget.db';
 
@@ -33,6 +39,23 @@ export function initDb(): void {
         // column already exists
       }
     }
+    if (current < 3) {
+      // v2 -> v3: envelope stacks + creditors. (creditors table is created by
+      // SCHEMA_SQL above via IF NOT EXISTS.)
+      try {
+        c.execSync('ALTER TABLE envelopes ADD COLUMN stack TEXT');
+      } catch {
+        // column already exists
+      }
+    }
+    if (current < 4) {
+      // v3 -> v4: per-envelope currency.
+      try {
+        c.execSync('ALTER TABLE envelopes ADD COLUMN currency TEXT');
+      } catch {
+        // column already exists
+      }
+    }
     c.execSync(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   }
 }
@@ -45,7 +68,19 @@ interface EnvelopeRow {
   allocated: number;
   color: string | null;
   icon: string | null;
+  stack: string | null;
+  currency: string | null;
   sort_order: number;
+  created_at: number;
+}
+
+interface CreditorRow {
+  id: string;
+  envelope_id: string;
+  name: string | null;
+  amount: number;
+  currency: string;
+  note: string | null;
   created_at: number;
 }
 
@@ -80,7 +115,21 @@ function mapEnvelope(r: EnvelopeRow): Envelope {
     allocated: r.allocated,
     color: r.color ?? '#3B82F6',
     icon: r.icon,
+    stack: r.stack ?? null,
+    currency: r.currency ?? 'USD',
     sortOrder: r.sort_order,
+    createdAt: r.created_at,
+  };
+}
+
+function mapCreditor(r: CreditorRow): Creditor {
+  return {
+    id: r.id,
+    envelopeId: r.envelope_id,
+    name: r.name,
+    amount: r.amount,
+    currency: r.currency,
+    note: r.note,
     createdAt: r.created_at,
   };
 }
@@ -115,6 +164,8 @@ export interface NewEnvelope {
   allocated: number;
   color: string;
   icon?: string | null;
+  stack?: string | null;
+  currency: string;
   sortOrder: number;
 }
 
@@ -125,20 +176,34 @@ export function insertEnvelope(input: NewEnvelope): Envelope {
     allocated: input.allocated,
     color: input.color,
     icon: input.icon ?? null,
+    stack: input.stack ?? null,
+    currency: input.currency,
     sortOrder: input.sortOrder,
     createdAt: Date.now(),
   };
   conn().runSync(
-    `INSERT INTO envelopes (id, name, allocated, color, icon, sort_order, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [env.id, env.name, env.allocated, env.color, env.icon, env.sortOrder, env.createdAt]
+    `INSERT INTO envelopes (id, name, allocated, color, icon, stack, currency, sort_order, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      env.id,
+      env.name,
+      env.allocated,
+      env.color,
+      env.icon,
+      env.stack,
+      env.currency,
+      env.sortOrder,
+      env.createdAt,
+    ]
   );
   return env;
 }
 
 export function updateEnvelopeRow(
   id: string,
-  patch: Partial<Pick<Envelope, 'name' | 'allocated' | 'color' | 'icon' | 'sortOrder'>>
+  patch: Partial<
+    Pick<Envelope, 'name' | 'allocated' | 'color' | 'icon' | 'stack' | 'currency' | 'sortOrder'>
+  >
 ): void {
   const fields: string[] = [];
   const values: SQLite.SQLiteBindValue[] = [];
@@ -147,6 +212,9 @@ export function updateEnvelopeRow(
     (fields.push('allocated = ?'), values.push(patch.allocated));
   if (patch.color !== undefined) (fields.push('color = ?'), values.push(patch.color));
   if (patch.icon !== undefined) (fields.push('icon = ?'), values.push(patch.icon));
+  if (patch.stack !== undefined) (fields.push('stack = ?'), values.push(patch.stack));
+  if (patch.currency !== undefined)
+    (fields.push('currency = ?'), values.push(patch.currency));
   if (patch.sortOrder !== undefined)
     (fields.push('sort_order = ?'), values.push(patch.sortOrder));
   if (fields.length === 0) return;
@@ -268,10 +336,70 @@ export function setSetting(key: string, value: string): void {
   );
 }
 
+// ---- creditors ---------------------------------------------------------------
+
+export function getCreditors(): Creditor[] {
+  return conn()
+    .getAllSync<CreditorRow>('SELECT * FROM creditors ORDER BY created_at DESC')
+    .map(mapCreditor);
+}
+
+export interface NewCreditor {
+  envelopeId: string;
+  name?: string | null;
+  amount: number;
+  currency: string;
+  note?: string | null;
+}
+
+export function insertCreditor(input: NewCreditor): Creditor {
+  const cr: Creditor = {
+    id: uid('cr_'),
+    envelopeId: input.envelopeId,
+    name: input.name ?? null,
+    amount: input.amount,
+    currency: input.currency,
+    note: input.note ?? null,
+    createdAt: Date.now(),
+  };
+  conn().runSync(
+    `INSERT INTO creditors (id, envelope_id, name, amount, currency, note, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [cr.id, cr.envelopeId, cr.name, cr.amount, cr.currency, cr.note, cr.createdAt]
+  );
+  return cr;
+}
+
+export function updateCreditorRow(
+  id: string,
+  patch: Partial<Pick<Creditor, 'name' | 'amount' | 'note' | 'envelopeId'>>
+): void {
+  const fields: string[] = [];
+  const values: SQLite.SQLiteBindValue[] = [];
+  if (patch.name !== undefined) (fields.push('name = ?'), values.push(patch.name));
+  if (patch.amount !== undefined) (fields.push('amount = ?'), values.push(patch.amount));
+  if (patch.note !== undefined) (fields.push('note = ?'), values.push(patch.note));
+  if (patch.envelopeId !== undefined)
+    (fields.push('envelope_id = ?'), values.push(patch.envelopeId));
+  if (fields.length === 0) return;
+  values.push(id);
+  conn().runSync(`UPDATE creditors SET ${fields.join(', ')} WHERE id = ?`, values);
+}
+
+export function deleteCreditorRow(id: string): void {
+  conn().runSync('DELETE FROM creditors WHERE id = ?', [id]);
+}
+
+/** New cycle: wipe all transactions so every envelope returns to its allocation. */
+export function refreshBudget(): void {
+  conn().runSync('DELETE FROM transactions');
+}
+
 /** Test/dev helper: wipe everything. */
 export function resetDb(): void {
   const c = conn();
   c.withTransactionSync(() => {
+    c.runSync('DELETE FROM creditors');
     c.runSync('DELETE FROM transactions');
     c.runSync('DELETE FROM envelopes');
   });

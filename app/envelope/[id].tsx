@@ -17,10 +17,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AmountText } from '@/components/AmountText';
 import { Card } from '@/components/Card';
+import { DualAmount } from '@/components/DualAmount';
 import { ProgressRing } from '@/components/ProgressRing';
-import { formatMoney, progressRatio, toMinorUnits } from '@/lib/money';
+import { formatMoney, toMinorUnits } from '@/lib/money';
 import { normalizeAmount } from '@/lib/receipt';
-import { envelopeTotals, useBudget } from '@/lib/store';
+import { envelopeOwed, envelopeTotals, ringRatios, useBudget } from '@/lib/store';
+import { useConvert } from '@/lib/useConvert';
 import { useTheme, useThemedStyles } from '@/lib/useTheme';
 import { type AppColors, fontSize, radius, spacing } from '@/lib/theme';
 
@@ -30,10 +32,11 @@ export default function EnvelopeDetailScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const { convert } = useConvert();
 
   const envelope = useBudget((s) => s.envelopes.find((e) => e.id === id));
   const transactions = useBudget((s) => s.transactions);
-  const currency = useBudget((s) => s.defaultCurrency);
+  const creditors = useBudget((s) => s.creditors);
   const topUp = useBudget((s) => s.topUp);
 
   const [topUpOpen, setTopUpOpen] = useState(false);
@@ -52,9 +55,11 @@ export default function EnvelopeDetailScreen() {
     );
   }
 
-  const totals = envelopeTotals(envelope.id, transactions, envelope.allocated);
+  const currency = envelope.currency;
+  const totals = envelopeTotals(envelope.id, transactions, envelope.allocated, currency, convert);
   const budget = envelope.allocated + totals.toppedUp;
-  const ratio = progressRatio(totals.spent, budget);
+  const owed = envelopeOwed(creditors, envelope.id, currency, convert);
+  const ring = ringRatios(totals.remaining, owed, budget);
 
   function handleTopUp() {
     const parsed = normalizeAmount(amount);
@@ -74,23 +79,32 @@ export default function EnvelopeDetailScreen() {
       >
         <Card style={styles.hero}>
           <ProgressRing
-            progress={ratio}
+            progress={ring.fill}
+            owedProgress={ring.owed}
             size={120}
             strokeWidth={10}
-            color={ratio < 0.85 ? envelope.color : undefined}
-            label={`${Math.round(ratio * 100)}%`}
+            color={ring.fill > 0.15 ? envelope.color : undefined}
+            label={`${ring.fillPct}%`}
           />
           <Text style={styles.remainingLabel}>Remaining</Text>
-          <AmountText
-            minor={totals.remaining}
-            currency={currency}
-            size="display"
-            style={{ color: totals.remaining < 0 ? colors.negative : colors.text }}
-          />
+          <View style={{ alignItems: 'center' }}>
+            <DualAmount
+              minor={totals.remaining}
+              currency={currency}
+              size="display"
+              align="left"
+              primaryStyle={{ color: totals.remaining < 0 ? colors.negative : colors.text }}
+            />
+          </View>
           <Text style={styles.sub}>
             {formatMoney(totals.spent, currency)} spent of{' '}
             {formatMoney(budget, currency)}
           </Text>
+          {owed > 0 && (
+            <Text style={[styles.sub, { color: colors.owed, fontWeight: '700' }]}>
+              +{formatMoney(owed, currency)} owed to you
+            </Text>
+          )}
 
           <Pressable style={styles.topUpBtn} onPress={() => setTopUpOpen(true)}>
             <Ionicons name="add" size={20} color="#fff" />
@@ -120,7 +134,7 @@ export default function EnvelopeDetailScreen() {
                       {t.source === 'scan' ? 'Scanned' : 'Manual'}
                     </Text>
                   </View>
-                  <AmountText
+                  <DualAmount
                     minor={t.amount}
                     currency={t.currency}
                     colorBySign

@@ -5,10 +5,17 @@
  * not for real persistence. Metro picks this file for `platform === 'web'`.
  */
 import { uid } from '../id';
-import type { Envelope, LineItem, Transaction, TransactionSource } from './types';
+import type {
+  Creditor,
+  Envelope,
+  LineItem,
+  Transaction,
+  TransactionSource,
+} from './types';
 
 let envelopes: Envelope[] = [];
 let transactions: Transaction[] = [];
+let creditors: Creditor[] = [];
 
 export function initDb(): void {
   // Starts empty — same first-boot experience as the native SQLite layer.
@@ -25,6 +32,8 @@ export interface NewEnvelope {
   allocated: number;
   color: string;
   icon?: string | null;
+  stack?: string | null;
+  currency: string;
   sortOrder: number;
 }
 
@@ -35,6 +44,8 @@ export function insertEnvelope(input: NewEnvelope): Envelope {
     allocated: input.allocated,
     color: input.color,
     icon: input.icon ?? null,
+    stack: input.stack ?? null,
+    currency: input.currency,
     sortOrder: input.sortOrder,
     createdAt: Date.now(),
   };
@@ -44,7 +55,9 @@ export function insertEnvelope(input: NewEnvelope): Envelope {
 
 export function updateEnvelopeRow(
   id: string,
-  patch: Partial<Pick<Envelope, 'name' | 'allocated' | 'color' | 'icon' | 'sortOrder'>>
+  patch: Partial<
+    Pick<Envelope, 'name' | 'allocated' | 'color' | 'icon' | 'stack' | 'currency' | 'sortOrder'>
+  >
 ): void {
   envelopes = envelopes.map((e) => (e.id === id ? { ...e, ...patch } : e));
 }
@@ -131,7 +144,51 @@ export function setSetting(key: string, value: string): void {
   }
 }
 
+// ---- creditors ---------------------------------------------------------------
+
+export function getCreditors(): Creditor[] {
+  return [...creditors].sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export interface NewCreditor {
+  envelopeId: string;
+  name?: string | null;
+  amount: number;
+  currency: string;
+  note?: string | null;
+}
+
+export function insertCreditor(input: NewCreditor): Creditor {
+  const cr: Creditor = {
+    id: uid('cr_'),
+    envelopeId: input.envelopeId,
+    name: input.name ?? null,
+    amount: input.amount,
+    currency: input.currency,
+    note: input.note ?? null,
+    createdAt: Date.now(),
+  };
+  creditors.unshift(cr);
+  return cr;
+}
+
+export function updateCreditorRow(
+  id: string,
+  patch: Partial<Pick<Creditor, 'name' | 'amount' | 'note' | 'envelopeId'>>
+): void {
+  creditors = creditors.map((c) => (c.id === id ? { ...c, ...patch } : c));
+}
+
+export function deleteCreditorRow(id: string): void {
+  creditors = creditors.filter((c) => c.id !== id);
+}
+
+export function refreshBudget(): void {
+  transactions = [];
+}
+
 export function resetDb(): void {
   envelopes = [];
   transactions = [];
+  creditors = [];
 }

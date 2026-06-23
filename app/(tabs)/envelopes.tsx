@@ -3,8 +3,8 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { AmountText } from '@/components/AmountText';
 import { Card } from '@/components/Card';
+import { DualAmount } from '@/components/DualAmount';
 import { EnvelopeEditor, type EnvelopeDraft } from '@/components/EnvelopeEditor';
 import { ListRow } from '@/components/ListRow';
 import type { Envelope } from '@/lib/db/types';
@@ -82,7 +82,7 @@ export default function EnvelopesScreen() {
                   title={env.name}
                   right={
                     <View style={styles.rowRight}>
-                      <AmountText minor={env.allocated} currency={currency} size="md" />
+                      <DualAmount minor={env.allocated} currency={env.currency} size="md" />
                       <Pressable
                         onPress={() => openEdit(env)}
                         hitSlop={10}
@@ -109,6 +109,11 @@ export default function EnvelopesScreen() {
         visible={editorOpen}
         envelope={editing}
         currency={currency}
+        existingStacks={[
+          ...new Set(
+            envelopes.map((e) => e.stack?.trim()).filter((s): s is string => !!s)
+          ),
+        ]}
         onClose={() => setEditorOpen(false)}
         onSave={handleSave}
         onDelete={handleDelete}

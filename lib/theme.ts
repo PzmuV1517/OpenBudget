@@ -20,6 +20,8 @@ export interface AppColors {
   positive: string;
   negative: string;
   warning: string;
+  /** Money owed to you (creditors) — always blue, in both themes. */
+  owed: string;
   // Lines
   border: string;
   shadow: string;
@@ -37,6 +39,7 @@ export const lightColors: AppColors = {
   positive: '#16A34A',
   negative: '#DC2626',
   warning: '#D97706',
+  owed: '#2563EB',
   border: '#E5E7EB',
   shadow: '#000000',
 };
@@ -54,6 +57,7 @@ export const darkColors: AppColors = {
   positive: '#34D399',
   negative: '#FF6B6B',
   warning: '#FBBF24',
+  owed: '#3B82F6',
   border: '#2A2A2A',
   shadow: '#000000',
 };

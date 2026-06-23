@@ -4,17 +4,32 @@ import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { useBudget } from '@/lib/store';
+import { setQuickEnvelopes } from '@/lib/notificationReader';
+import { topEnvelopes, useBudget } from '@/lib/store';
 import { useTheme } from '@/lib/useTheme';
 
 export default function RootLayout() {
   const hydrate = useBudget((s) => s.hydrate);
+  const refreshRates = useBudget((s) => s.refreshRates);
+  const envelopes = useBudget((s) => s.envelopes);
+  const transactions = useBudget((s) => s.transactions);
+  const drEnabled = useBudget((s) => s.drEnabled);
   const { scheme, colors } = useTheme();
 
-  // SQLite is the source of truth; pull it into the in-memory store once.
+  // SQLite is the source of truth; pull it into the in-memory store once, then
+  // best-effort refresh exchange rates (no-op when offline).
   useEffect(() => {
     hydrate();
-  }, [hydrate]);
+    refreshRates();
+  }, [hydrate, refreshRates]);
+
+  // Keep the notification's quick-add buttons pointed at the most-used envelopes.
+  useEffect(() => {
+    if (!drEnabled) return;
+    setQuickEnvelopes(
+      topEnvelopes(envelopes, transactions, 3).map((e) => ({ id: e.id, name: e.name }))
+    );
+  }, [drEnabled, envelopes, transactions]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -48,6 +63,10 @@ export default function RootLayout() {
           <Stack.Screen
             name="digital-receipts/ledger"
             options={{ title: 'Digital receipt ledger', headerBackTitle: 'Back' }}
+          />
+          <Stack.Screen
+            name="digital-receipts/quick-add"
+            options={{ title: 'Quick add', presentation: 'modal' }}
           />
           <Stack.Screen
             name="add/manual"

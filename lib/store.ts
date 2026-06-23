@@ -6,8 +6,23 @@
 import { create } from 'zustand';
 
 import * as db from './db';
-import type { Envelope, EnvelopeTotals, Transaction } from './db/types';
+import type { Creditor, Envelope, Transaction } from './db/types';
+import { fetchRates, type Rates } from './rates';
 import { envelopePalette } from './theme';
+
+// Pure derived-value helpers live in budgetMath; re-exported for existing callers.
+export {
+  envelopeTotals,
+  budgetSummary,
+  envelopeOwed,
+  ringRatios,
+  topEnvelopes,
+  groupEnvelopes,
+  stackTotals,
+  type BudgetSummary,
+  type HomeRow,
+  type StackTotals,
+} from './budgetMath';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -15,8 +30,11 @@ interface BudgetState {
   hydrated: boolean;
   defaultCurrency: string;
   themeMode: ThemeMode;
+  /** Cached exchange rates, or null if never fetched. */
+  rates: Rates | null;
   envelopes: Envelope[];
   transactions: Transaction[];
+  creditors: Creditor[];
 
   // Digital receipts (experimental notification capture).
   drEnabled: boolean;
@@ -29,19 +47,38 @@ interface BudgetState {
   setThemeMode: (mode: ThemeMode) => void;
   setDrEnabled: (enabled: boolean) => void;
   setDrApps: (apps: string[]) => void;
+  /** Best-effort online refresh of exchange rates; no-op when offline. */
+  refreshRates: () => Promise<void>;
 
   addEnvelope: (input: {
     name: string;
     allocated: number;
     color?: string;
     icon?: string | null;
+    stack?: string | null;
+    currency?: string;
   }) => Envelope;
   updateEnvelope: (
     id: string,
-    patch: Partial<Pick<Envelope, 'name' | 'allocated' | 'color' | 'icon'>>
+    patch: Partial<
+      Pick<Envelope, 'name' | 'allocated' | 'color' | 'icon' | 'stack' | 'currency'>
+    >
   ) => void;
   deleteEnvelope: (id: string) => void;
   reorderEnvelopes: (orderedIds: string[]) => void;
+
+  /** New cycle: clears the ledger so every envelope returns to its allocation. */
+  refreshBudget: () => void;
+
+  // Creditors — money owed to you, earmarked to an envelope.
+  addCreditor: (input: db.NewCreditor) => Creditor;
+  updateCreditor: (
+    id: string,
+    patch: Partial<Pick<Creditor, 'name' | 'amount' | 'note' | 'envelopeId'>>
+  ) => void;
+  deleteCreditor: (id: string) => void;
+  /** Collected: move the owed money into the envelope as a top-up this cycle. */
+  collectCreditor: (id: string) => void;
 
   /** Record a spend or top-up. `amount` is signed minor units. */
   addTransaction: (input: db.NewTransaction) => Transaction;
@@ -61,8 +98,10 @@ export const useBudget = create<BudgetState>((set, get) => ({
   hydrated: false,
   defaultCurrency: 'USD',
   themeMode: 'dark', // app defaults to the black/red dark theme
+  rates: null,
   envelopes: [],
   transactions: [],
+  creditors: [],
   drEnabled: false,
   drApps: [],
   drConfiguredOnce: false,
@@ -77,9 +116,18 @@ export const useBudget = create<BudgetState>((set, get) => ({
     } catch {
       drApps = [];
     }
+    let rates: Rates | null = null;
+    try {
+      const raw = db.getSetting('rates');
+      rates = raw ? (JSON.parse(raw) as Rates) : null;
+    } catch {
+      rates = null;
+    }
     set({
       envelopes: db.getEnvelopes(),
       transactions: db.getTransactions(),
+      creditors: db.getCreditors(),
+      rates,
       themeMode: storedMode ?? 'dark',
       defaultCurrency: storedCurrency ?? 'USD',
       drEnabled: db.getSetting('drEnabled') === 'true',
@@ -105,6 +153,14 @@ export const useBudget = create<BudgetState>((set, get) => ({
     set({ drEnabled: enabled });
   },
 
+  refreshRates: async () => {
+    const fresh = await fetchRates();
+    if (fresh) {
+      db.setSetting('rates', JSON.stringify(fresh));
+      set({ rates: fresh });
+    }
+  },
+
   setDrApps: (apps) => {
     db.setSetting('drApps', JSON.stringify(apps));
     // "Fully configured" once it's enabled with at least one app chosen.
@@ -124,6 +180,8 @@ export const useBudget = create<BudgetState>((set, get) => ({
       allocated: input.allocated,
       color,
       icon: input.icon ?? null,
+      stack: input.stack ?? null,
+      currency: input.currency ?? get().defaultCurrency,
       sortOrder: existing.length,
     });
     set({ envelopes: [...existing, env] });
@@ -187,50 +245,46 @@ export const useBudget = create<BudgetState>((set, get) => ({
     set({ transactions: get().transactions.filter((t) => t.id !== id) });
   },
 
+  refreshBudget: () => {
+    db.refreshBudget();
+    set({ transactions: [] });
+  },
+
+  addCreditor: (input) => {
+    const cr = db.insertCreditor(input);
+    set({ creditors: [cr, ...get().creditors] });
+    return cr;
+  },
+
+  updateCreditor: (id, patch) => {
+    db.updateCreditorRow(id, patch);
+    set({
+      creditors: get().creditors.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+    });
+  },
+
+  deleteCreditor: (id) => {
+    db.deleteCreditorRow(id);
+    set({ creditors: get().creditors.filter((c) => c.id !== id) });
+  },
+
+  collectCreditor: (id) => {
+    const cr = get().creditors.find((c) => c.id === id);
+    if (!cr) return;
+    // The owed money becomes real money in the envelope this cycle.
+    get().addTransaction({
+      envelopeId: cr.envelopeId,
+      amount: Math.abs(cr.amount),
+      currency: cr.currency,
+      note: cr.name ? `Debt collected: ${cr.name}` : 'Debt collected',
+      source: 'manual',
+    });
+    db.deleteCreditorRow(id);
+    set({ creditors: get().creditors.filter((c) => c.id !== id) });
+  },
+
   resetAll: () => {
     db.resetDb();
-    set({ envelopes: [], transactions: [] });
+    set({ envelopes: [], transactions: [], creditors: [] });
   },
 }));
-
-// ---- selectors (pure; call with state from the hook) -------------------------
-
-export function envelopeTotals(
-  envelopeId: string,
-  transactions: Transaction[],
-  allocated: number
-): EnvelopeTotals {
-  let spent = 0;
-  let toppedUp = 0;
-  for (const t of transactions) {
-    if (t.envelopeId !== envelopeId) continue;
-    if (t.amount < 0) spent += -t.amount;
-    else toppedUp += t.amount;
-  }
-  return { spent, toppedUp, remaining: allocated + toppedUp - spent };
-}
-
-export interface BudgetSummary {
-  totalAllocated: number;
-  totalSpent: number;
-  totalRemaining: number;
-}
-
-export function budgetSummary(
-  envelopes: Envelope[],
-  transactions: Transaction[]
-): BudgetSummary {
-  let totalAllocated = 0;
-  let totalSpent = 0;
-  let totalToppedUp = 0;
-  for (const e of envelopes) totalAllocated += e.allocated;
-  for (const t of transactions) {
-    if (t.amount < 0) totalSpent += -t.amount;
-    else totalToppedUp += t.amount;
-  }
-  return {
-    totalAllocated,
-    totalSpent,
-    totalRemaining: totalAllocated + totalToppedUp - totalSpent,
-  };
-}

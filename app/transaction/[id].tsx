@@ -14,7 +14,7 @@ import {
   View,
 } from 'react-native';
 
-import { AmountText } from '@/components/AmountText';
+import { DualAmount } from '@/components/DualAmount';
 import { Card } from '@/components/Card';
 import { EnvelopePill } from '@/components/EnvelopePill';
 import { formatMoney } from '@/lib/money';
@@ -80,11 +80,12 @@ export default function TransactionDetailScreen() {
       <Stack.Screen options={{ title: 'Transaction' }} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Card style={styles.hero}>
-          <AmountText
+          <DualAmount
             minor={txn.amount}
             currency={txn.currency}
             colorBySign
             size="display"
+            align="left"
           />
           <Text style={styles.title}>{title}</Text>
           <View style={styles.meta}>

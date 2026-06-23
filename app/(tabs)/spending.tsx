@@ -1,15 +1,16 @@
+import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
 import { format, isToday, isYesterday } from 'date-fns';
 import { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AmountText } from '@/components/AmountText';
+import { DualAmount } from '@/components/DualAmount';
 import { EnvelopePill } from '@/components/EnvelopePill';
 import type { Envelope, Transaction } from '@/lib/db/types';
 import { useBudget } from '@/lib/store';
-import { useThemedStyles } from '@/lib/useTheme';
-import { type AppColors, fontSize, spacing } from '@/lib/theme';
+import { useTheme, useThemedStyles } from '@/lib/useTheme';
+import { type AppColors, fontSize, radius, spacing } from '@/lib/theme';
 
 type Row =
   | { kind: 'header'; key: string; label: string }
@@ -41,6 +42,8 @@ export default function SpendingScreen() {
   const router = useRouter();
   const transactions = useBudget((s) => s.transactions);
   const envelopes = useBudget((s) => s.envelopes);
+  const refreshBudget = useBudget((s) => s.refreshBudget);
+  const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
 
   const envById = useMemo(() => {
@@ -51,23 +54,46 @@ export default function SpendingScreen() {
 
   const rows = useMemo(() => buildRows(transactions), [transactions]);
 
+  function confirmRefresh() {
+    Alert.alert(
+      'Refresh budget',
+      'Start a new cycle? This clears the entire spending ledger and refills every envelope back to its allocation. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Refresh', style: 'destructive', onPress: refreshBudget },
+      ]
+    );
+  }
+
+  const refreshBar = (
+    <Pressable style={styles.refreshBar} onPress={confirmRefresh}>
+      <Ionicons name="refresh" size={18} color={colors.accent} />
+      <Text style={styles.refreshText}>Refresh budget</Text>
+    </Pressable>
+  );
+
   if (transactions.length === 0) {
     return (
-      <View style={styles.empty}>
-        <Text style={styles.emptyText}>No transactions yet.</Text>
-        <Text style={styles.emptyHint}>
-          Add spending from the Home tab with the + button.
-        </Text>
+      <View style={styles.screen}>
+        {refreshBar}
+        <View style={styles.empty}>
+          <Text style={styles.emptyText}>No transactions yet.</Text>
+          <Text style={styles.emptyHint}>
+            Add spending from the Home tab with the + button.
+          </Text>
+        </View>
       </View>
     );
   }
 
   return (
-    <FlashList
-      data={rows}
-      keyExtractor={(r) => r.key}
-      contentContainerStyle={styles.list}
-      renderItem={({ item }) => {
+    <View style={styles.screen}>
+      {refreshBar}
+      <FlashList
+        data={rows}
+        keyExtractor={(r) => r.key}
+        contentContainerStyle={styles.list}
+        renderItem={({ item }) => {
         if (item.kind === 'header') {
           return <Text style={styles.header}>{item.label}</Text>;
         }
@@ -96,21 +122,44 @@ export default function SpendingScreen() {
                 )}
               </View>
             </View>
-            <AmountText
+            <DualAmount
               minor={txn.amount}
               currency={txn.currency}
               colorBySign
               size="md"
             />
           </Pressable>
-        );
-      }}
-    />
+          );
+        }}
+      />
+    </View>
   );
 }
 
 const makeStyles = (c: AppColors) =>
   StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: c.background,
+    },
+    refreshBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.md,
+      marginHorizontal: spacing.lg,
+      marginTop: spacing.md,
+      borderRadius: radius.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: c.border,
+      backgroundColor: c.card,
+    },
+    refreshText: {
+      fontSize: fontSize.md,
+      fontWeight: '700',
+      color: c.accent,
+    },
     list: {
       paddingHorizontal: spacing.lg,
       paddingVertical: spacing.md,

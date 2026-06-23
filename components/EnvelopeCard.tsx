@@ -1,28 +1,31 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { AmountText } from './AmountText';
 import { Card } from './Card';
+import { DualAmount } from './DualAmount';
 import { ListRow } from './ListRow';
 import { ProgressRing } from './ProgressRing';
-import { formatMoney, progressRatio } from '@/lib/money';
+import { formatMoney } from '@/lib/money';
+import { ringRatios } from '@/lib/budgetMath';
 import type { Envelope, EnvelopeTotals } from '@/lib/db/types';
 import { useTheme, useThemedStyles } from '@/lib/useTheme';
 import { type AppColors, fontSize, spacing } from '@/lib/theme';
 
 interface EnvelopeCardProps {
   envelope: Envelope;
+  /** Totals computed in the envelope's own currency. */
   totals: EnvelopeTotals;
-  currency: string;
+  /** Outstanding owed to this envelope (envelope currency, minor units). */
+  owed?: number;
   onPress?: () => void;
 }
 
 /** Home-screen envelope row: name, remaining vs budget, progress ring. */
-export function EnvelopeCard({ envelope, totals, currency, onPress }: EnvelopeCardProps) {
+export function EnvelopeCard({ envelope, totals, owed = 0, onPress }: EnvelopeCardProps) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const currency = envelope.currency;
   const budget = envelope.allocated + totals.toppedUp;
-  const ratio = progressRatio(totals.spent, budget);
-  const pct = Math.round(ratio * 100);
+  const ring = ringRatios(totals.remaining, owed, budget);
 
   return (
     <Card padded={false} style={styles.card}>
@@ -32,23 +35,29 @@ export function EnvelopeCard({ envelope, totals, currency, onPress }: EnvelopeCa
           showChevron
           left={
             <ProgressRing
-              progress={ratio}
+              progress={ring.fill}
+              owedProgress={ring.owed}
               size={46}
-              color={ratio < 0.85 ? envelope.color : undefined}
-              label={`${pct}%`}
+              label={`${ring.fillPct}%`}
             />
           }
           title={envelope.name}
-          subtitle={`${formatMoney(totals.spent, currency)} of ${formatMoney(budget, currency)}`}
+          subtitle={`${formatMoney(totals.remaining, currency)} of ${formatMoney(budget, currency)} left`}
           right={
             <View style={styles.amounts}>
-              <AmountText
+              <DualAmount
                 minor={totals.remaining}
                 currency={currency}
                 size="md"
-                style={{ color: totals.remaining < 0 ? colors.negative : colors.text }}
+                primaryStyle={{
+                  color: totals.remaining < 0 ? colors.negative : colors.text,
+                }}
               />
-              <Text style={styles.ofBudget}>left</Text>
+              {owed > 0 && (
+                <Text style={[styles.owed, { color: colors.owed }]}>
+                  +{formatMoney(owed, currency)} owed · {ring.owedPct}%
+                </Text>
+              )}
             </View>
           }
         />
@@ -71,6 +80,11 @@ const makeStyles = (c: AppColors) =>
     ofBudget: {
       fontSize: fontSize.xs,
       color: c.textFaint,
+      marginTop: 1,
+    },
+    owed: {
+      fontSize: fontSize.xs,
+      fontWeight: '700',
       marginTop: 1,
     },
   });

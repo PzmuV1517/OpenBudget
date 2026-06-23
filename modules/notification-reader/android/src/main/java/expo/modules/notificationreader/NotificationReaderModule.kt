@@ -53,6 +53,11 @@ class NotificationReaderModule : Module() {
       ReceiptStore.setMonitored(context, packages)
     }
 
+    // Top envelopes for the notification's quick-add buttons (JSON [{id,name}]).
+    Function("setQuickEnvelopes") { json: String ->
+      ReceiptStore.setQuickEnvelopes(context, json)
+    }
+
     // Apps that have posted notifications since monitoring started (discovery).
     Function("getSeenAppsJson") {
       ReceiptStore.getSeenJson(context)

@@ -22,11 +22,17 @@ export interface NativeReceipt {
   timestamp: number;
 }
 
+export interface QuickEnvelope {
+  id: string;
+  name: string;
+}
+
 interface NativeModule {
   hasAccess(): boolean;
   openSettings(): void;
   setEnabled(enabled: boolean): void;
   setMonitoredPackages(packages: string[]): void;
+  setQuickEnvelopes(json: string): void;
   getSeenAppsJson(): string;
   clearSeenApps(): void;
   getCapturedJson(): string;
@@ -64,6 +70,11 @@ export function setMonitoringEnabled(enabled: boolean): void {
 
 export function setMonitoredPackages(packages: string[]): void {
   native?.setMonitoredPackages(packages);
+}
+
+/** Tell the native notification its quick-add buttons (top-used envelopes). */
+export function setQuickEnvelopes(envelopes: QuickEnvelope[]): void {
+  native?.setQuickEnvelopes(JSON.stringify(envelopes));
 }
 
 /** Apps that have notified you since monitoring started, newest activity first. */

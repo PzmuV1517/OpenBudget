@@ -7,9 +7,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AmountText } from '@/components/AmountText';
 import { Card } from '@/components/Card';
 import { EnvelopeCard } from '@/components/EnvelopeCard';
+import { StackCard } from '@/components/StackCard';
 import { RadialAddMenu } from '@/components/RadialAddMenu';
 import { progressRatio } from '@/lib/money';
-import { budgetSummary, envelopeTotals, useBudget } from '@/lib/store';
+import {
+  budgetSummary,
+  envelopeOwed,
+  envelopeTotals,
+  groupEnvelopes,
+  useBudget,
+} from '@/lib/store';
+import { useConvert } from '@/lib/useConvert';
 import { useTheme, useThemedStyles } from '@/lib/useTheme';
 import { type AppColors, fontSize, radius, spacing } from '@/lib/theme';
 
@@ -18,15 +26,18 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const { convert } = useConvert();
 
   const envelopes = useBudget((s) => s.envelopes);
   const transactions = useBudget((s) => s.transactions);
+  const creditors = useBudget((s) => s.creditors);
   const currency = useBudget((s) => s.defaultCurrency);
 
   const summary = useMemo(
-    () => budgetSummary(envelopes, transactions),
-    [envelopes, transactions]
+    () => budgetSummary(envelopes, transactions, currency, convert),
+    [envelopes, transactions, currency, convert]
   );
+  const rows = useMemo(() => groupEnvelopes(envelopes), [envelopes]);
   const spentRatio = progressRatio(summary.totalSpent, summary.totalAllocated);
   const fillColor =
     spentRatio >= 1 ? colors.negative : spentRatio >= 0.85 ? colors.warning : colors.accent;
@@ -75,14 +86,34 @@ export default function HomeScreen() {
             faint={colors.textFaint}
           />
         ) : (
-          envelopes.map((env) => {
-            const totals = envelopeTotals(env.id, transactions, env.allocated);
+          rows.map((row) => {
+            if (row.kind === 'stack') {
+              return (
+                <StackCard
+                  key={`stack-${row.name}`}
+                  name={row.name}
+                  envelopes={row.envelopes}
+                  transactions={transactions}
+                  creditors={creditors}
+                  currency={currency}
+                  onPressEnvelope={(id) => router.push(`/envelope/${id}`)}
+                />
+              );
+            }
+            const env = row.envelope;
+            const totals = envelopeTotals(
+              env.id,
+              transactions,
+              env.allocated,
+              env.currency,
+              convert
+            );
             return (
               <EnvelopeCard
                 key={env.id}
                 envelope={env}
                 totals={totals}
-                currency={currency}
+                owed={envelopeOwed(creditors, env.id, env.currency, convert)}
                 onPress={() => router.push(`/envelope/${env.id}`)}
               />
             );

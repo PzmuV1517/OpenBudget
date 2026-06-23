@@ -1,6 +1,6 @@
 /** SQLite DDL. Bump SCHEMA_VERSION and add a migration when this changes. */
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 4;
 
 export const SCHEMA_SQL = `
 PRAGMA journal_mode = WAL;
@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS envelopes (
   allocated   INTEGER NOT NULL DEFAULT 0,
   color       TEXT,
   icon        TEXT,
+  stack       TEXT,
+  currency    TEXT,
   sort_order  INTEGER NOT NULL DEFAULT 0,
   created_at  INTEGER NOT NULL
 );
@@ -36,4 +38,17 @@ CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY NOT NULL,
   value TEXT
 );
+
+-- Money other people owe you, earmarked to an envelope but not yet in hand.
+CREATE TABLE IF NOT EXISTS creditors (
+  id          TEXT PRIMARY KEY NOT NULL,
+  envelope_id TEXT NOT NULL REFERENCES envelopes(id) ON DELETE CASCADE,
+  name        TEXT,
+  amount      INTEGER NOT NULL,
+  currency    TEXT NOT NULL,
+  note        TEXT,
+  created_at  INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_creditor_envelope ON creditors(envelope_id);
 `;

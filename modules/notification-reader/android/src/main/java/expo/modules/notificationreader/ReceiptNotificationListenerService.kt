@@ -79,6 +79,21 @@ class ReceiptNotificationListenerService : NotificationListenerService() {
     postPrompt(amount, title.ifEmpty { label })
   }
 
+  /** PendingIntent that cold-opens the app at a deep link. */
+  private fun deepLink(uri: String, requestCode: Int): PendingIntent? {
+    val launch = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+      action = Intent.ACTION_VIEW
+      data = Uri.parse(uri)
+      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+    } ?: return null
+    return PendingIntent.getActivity(
+      this,
+      requestCode,
+      launch,
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+  }
+
   private fun appLabel(pkg: String): String =
     try {
       val pm = packageManager
@@ -89,7 +104,7 @@ class ReceiptNotificationListenerService : NotificationListenerService() {
       pkg
     }
 
-  private fun postPrompt(amount: String, who: String) {
+  private fun postPrompt(amount: String, merchant: String) {
     val nm = getSystemService(NotificationManager::class.java) ?: return
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       nm.createNotificationChannel(
@@ -97,29 +112,33 @@ class ReceiptNotificationListenerService : NotificationListenerService() {
       )
     }
 
-    val launch = packageManager.getLaunchIntentForPackage(packageName)?.apply {
-      action = Intent.ACTION_VIEW
-      data = Uri.parse("openbudget://digital-receipts/ledger")
-      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-    } ?: return
+    val amt = Uri.encode(amount)
+    val note = Uri.encode(merchant)
 
-    val pi = PendingIntent.getActivity(
-      this,
-      0,
-      launch,
-      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    )
+    // Body tap → manual add prefilled with the captured data.
+    val bodyPi = deepLink("openbudget://add/manual?amount=$amt&note=$note", 0) ?: return
 
-    val notif = NotificationCompat.Builder(this, CHANNEL_ID)
+    val builder = NotificationCompat.Builder(this, CHANNEL_ID)
       .setSmallIcon(android.R.drawable.ic_input_add)
-      .setContentTitle("Add spending?")
-      .setContentText("$who · $amount")
+      .setContentTitle("Spent $amount?")
+      .setContentText(
+        if (merchant.isNotEmpty()) "$merchant — pick an envelope or tap to edit"
+        else "Pick an envelope or tap to edit"
+      )
       .setAutoCancel(true)
-      .setContentIntent(pi)
-      .build()
+      .setContentIntent(bodyPi)
+
+    // Quick action buttons for the top-used envelopes → subtract immediately.
+    ReceiptStore.getQuickEnvelopes(applicationContext).take(3).forEachIndexed { i, env ->
+      val uri =
+        "openbudget://digital-receipts/quick-add?amount=$amt&envelope=${Uri.encode(env.first)}&note=$note"
+      val pi = deepLink(uri, 100 + i)
+      if (pi != null) builder.addAction(0, env.second, pi)
+    }
 
     try {
-      NotificationManagerCompat.from(this).notify((System.currentTimeMillis() % 100000).toInt(), notif)
+      NotificationManagerCompat.from(this)
+        .notify((System.currentTimeMillis() % 100000).toInt(), builder.build())
     } catch (_: SecurityException) {
       // POST_NOTIFICATIONS not granted (Android 13+); capture still persisted.
     }
@@ -133,6 +152,7 @@ object ReceiptStore {
   private const val KEY_MONITORED = "monitored"
   private const val KEY_SEEN = "seen"
   private const val KEY_CAPTURED = "captured"
+  private const val KEY_QUICK = "quick"
   private const val MAX_KEPT = 100
 
   private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -179,6 +199,21 @@ object ReceiptStore {
       put("lastSeen", now)
     })
     prefs(ctx).edit().putString(KEY_SEEN, arr.toString()).apply()
+  }
+
+  /** Top envelopes for quick-add buttons, as (id, name) pairs. */
+  fun getQuickEnvelopes(ctx: Context): List<Pair<String, String>> {
+    val arr = JSONArray(prefs(ctx).getString(KEY_QUICK, "[]") ?: "[]")
+    val out = mutableListOf<Pair<String, String>>()
+    for (i in 0 until arr.length()) {
+      val o = arr.getJSONObject(i)
+      out.add(o.getString("id") to o.getString("name"))
+    }
+    return out
+  }
+
+  fun setQuickEnvelopes(ctx: Context, json: String) {
+    prefs(ctx).edit().putString(KEY_QUICK, json).apply()
   }
 
   fun getCapturedJson(ctx: Context): String = prefs(ctx).getString(KEY_CAPTURED, "[]") ?: "[]"

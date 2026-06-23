@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CurrencyChips } from './CurrencyChips';
 import type { Envelope } from '@/lib/db/types';
 import { toMajorUnits, toMinorUnits } from '@/lib/money';
 import { normalizeAmount } from '@/lib/receipt';
@@ -22,13 +23,18 @@ export interface EnvelopeDraft {
   name: string;
   allocated: number; // minor units
   color: string;
+  stack: string | null;
+  currency: string;
 }
 
 interface EnvelopeEditorProps {
   visible: boolean;
   /** Existing envelope to edit, or null to create a new one. */
   envelope: Envelope | null;
+  /** Default currency for new envelopes. */
   currency: string;
+  /** Existing stack names, offered as quick-pick chips. */
+  existingStacks: string[];
   onClose: () => void;
   onSave: (draft: EnvelopeDraft) => void;
   onDelete?: () => void;
@@ -38,6 +44,7 @@ export function EnvelopeEditor({
   visible,
   envelope,
   currency,
+  existingStacks,
   onClose,
   onSave,
   onDelete,
@@ -48,15 +55,18 @@ export function EnvelopeEditor({
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [color, setColor] = useState<string>(envelopePalette[0]);
+  const [stack, setStack] = useState('');
+  const [curr, setCurr] = useState(currency);
 
   // Re-seed the form whenever the target envelope changes.
   useEffect(() => {
     if (!visible) return;
+    const c = envelope?.currency ?? currency;
     setName(envelope?.name ?? '');
     setColor(envelope?.color ?? envelopePalette[0]);
-    setAmount(
-      envelope ? String(toMajorUnits(envelope.allocated, currency)) : ''
-    );
+    setStack(envelope?.stack ?? '');
+    setCurr(c);
+    setAmount(envelope ? String(toMajorUnits(envelope.allocated, c)) : '');
   }, [visible, envelope, currency]);
 
   const parsed = normalizeAmount(amount || '0');
@@ -66,8 +76,10 @@ export function EnvelopeEditor({
     if (!valid || parsed === null) return;
     onSave({
       name: name.trim(),
-      allocated: toMinorUnits(parsed, currency),
+      allocated: toMinorUnits(parsed, curr),
       color,
+      stack: stack.trim() || null,
+      currency: curr,
     });
   }
 
@@ -95,7 +107,10 @@ export function EnvelopeEditor({
               autoFocus={!envelope}
             />
 
-            <Text style={styles.label}>Allocation ({currency})</Text>
+            <Text style={styles.label}>Currency</Text>
+            <CurrencyChips value={curr} onChange={setCurr} />
+
+            <Text style={styles.label}>Allocation ({curr})</Text>
             <TextInput
               value={amount}
               onChangeText={setAmount}
@@ -119,6 +134,45 @@ export function EnvelopeEditor({
                 />
               ))}
             </View>
+
+            <Text style={styles.label}>Stack (optional)</Text>
+            <TextInput
+              value={stack}
+              onChangeText={setStack}
+              placeholder="e.g. Cash"
+              placeholderTextColor={colors.textFaint}
+              style={styles.input}
+            />
+            {existingStacks.length > 0 && (
+              <View style={styles.stackChips}>
+                {existingStacks.map((s) => (
+                  <Pressable
+                    key={s}
+                    onPress={() => setStack(stack.trim() === s ? '' : s)}
+                    style={[
+                      styles.stackChip,
+                      stack.trim() === s && {
+                        backgroundColor: colors.accentSoft,
+                        borderColor: colors.accent,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.stackChipText,
+                        stack.trim() === s && { color: colors.accent },
+                      ]}
+                    >
+                      {s}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+            <Text style={styles.stackHint}>
+              Envelopes sharing a stack name merge into one card on the home
+              screen, but stay separate for spending.
+            </Text>
 
             <Pressable
               onPress={handleSave}
@@ -193,6 +247,30 @@ const makeStyles = (c: AppColors) =>
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: spacing.sm,
+    },
+    stackChips: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+      marginTop: spacing.sm,
+    },
+    stackChip: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      borderRadius: radius.pill,
+      backgroundColor: c.cardAlt,
+      borderWidth: 1,
+      borderColor: 'transparent',
+    },
+    stackChipText: {
+      fontSize: fontSize.sm,
+      fontWeight: '600',
+      color: c.textMuted,
+    },
+    stackHint: {
+      fontSize: fontSize.xs,
+      color: c.textFaint,
+      marginTop: spacing.sm,
     },
     swatch: {
       width: 36,
